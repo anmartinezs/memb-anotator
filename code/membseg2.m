@@ -70,7 +70,7 @@ hfig = -1;
 % Get possible inputs
 handles.inTomoFile = '';
 if ~isempty(varargin)
-    inVarNames = {'inTomoFile', 'outputDir'};
+    inVarNames = {'inTomoFile', 'outFilename'};
     for i = 1:numel(inVarNames)
         cVar = inVarNames{i};
         ind = ismember(varargin, cVar);
@@ -255,16 +255,19 @@ function btn_sv_lbl_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 global L;
+isMaterial = false;
 
 if get(handles.rd_btn_mrc,'Value')
-    if ~isempty(handles.outputDir)
-        tom_mrcwrite(L, 'name', outputDir);
+    if ~isempty(handles.outFilename)
+        outputFile = checkOutputFilename(handles, isMaterial);
+        tom_mrcwrite(L, 'name', outputFile);
     else
         tom_mrcwrite(L);
     end
 else
-    if ~isempty(handles.outputDir)
-        tom_emwrite(L, 'name', outputDir);
+    if ~isempty(handles.outFilename)
+        outputFile = checkOutputFilename(handles, isMaterial);
+        tom_emwrite(L, 'name', outputFile);
     else
         tom_emwrite(L);
     end
@@ -1172,17 +1175,20 @@ function btn_sv_mat_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 global Q;
+isMaterial= true;
 
 if get(handles.rd_btn_mrc,'Value')
-    if ~isempty(handles.outputDir)
-        tom_mrcwrite(Q, 'name', outputDir);
+    if ~isempty(handles.outFilename)
+        outputFile = checkOutputFilename(handles, isMaterial);
+        tom_mrcwrite(Q, 'name', outputFile);
     else
         tom_mrcwrite(Q);
     end
         
 else
-    if ~isempty(handles.outputDir)
-        tom_emwrite(Q, 'name', outputDir);
+    if ~isempty(handles.outFilename)
+        outputFile = checkOutputFilename(handles, isMaterial);
+        tom_emwrite(Q, 'name', outputFile);
     else
         tom_emwrite(Q);
     end
@@ -1337,3 +1343,24 @@ handles.inTomoFile = '';
 
 % Update handles structure
 guidata(hObject, handles);
+
+
+function outputFile = checkOutputFilename(handles, isMaterial)
+[fpath, fname, ~] = fileparts(handles.outFilename);
+if isMaterial
+    materials = '_materials';
+    if ~endsWith(fname, materials)
+        fname = [fname, materials];
+    end
+else
+    labels = '_labels';
+    if ~endsWith(fname, labels)
+        fname = [fname, labels];
+    end
+end
+if get(handles.rd_btn_mrc,'Value')
+    fext = '.mrc';
+else
+    fext = '.em';
+end
+outputFile = fullfile(fpath, [fname, fext]);
