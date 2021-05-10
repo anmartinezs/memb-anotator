@@ -22,7 +22,7 @@ function varargout = membseg2(varargin)
 
 % Edit the above text to modify the response to help membseg2
 
-% Last Modified by GUIDE v2.5 04-Mar-2021 18:06:34
+% Last Modified by GUIDE v2.5 26-Apr-2021 13:03:12
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -53,24 +53,9 @@ function membseg2_OpeningFcn(hObject, eventdata, handles, varargin)
 % varargin   unrecognized PropertyName/PropertyValue pairs from the
 %            command line (see VARARGIN)
 
-% Choose default command line output for membseg2
-handles.output = hObject;
-
-% Update handles structure
-guidata(hObject, handles);
-
 % UIWAIT makes membseg2 wait for user response (see UIRESUME)
-% uiwait(handles.figure1);
+% uiwait(handles.membAnnotatorGUI);
 
-global O;
-global F;
-global T;
-global L;
-global M;
-global C;
-global N;
-global Q;
-% global No;
 global cur_state;
 global curs;
 global la;
@@ -79,78 +64,36 @@ global hfig;
 % Initialization
 la = 0;
 cur_state = 0;
-curs = datacursormode( hObject );
+curs = datacursormode(hObject);
 hfig = -1;
 
-% Load input tomogram
-[fname,idir] = uigetfile( {'*.mrc';'*.rec';'*.*'}, 'Stem name of input data' );    
-if fname == 0
-    close( hObject );
-    return
+% Get possible inputs
+handles.inTomoFile = '';
+if ~isempty(varargin)
+    inVarNames = {'inTomoFile', 'outputDir'};
+    for i = 1:numel(inVarNames)
+        cVar = inVarNames{i};
+        ind = ismember(varargin, cVar);
+        if any(ind)
+            handles.(cVar) = varargin{circshift(ind, 1)};
+        else
+            handles.(cVar) = '';
+        end  
+    end
 end
-[~,fstem,fext] = fileparts( fname );
-file = sprintf( '%s/%s%s', idir, fstem, fext );
-% TODO: This is provisional I do not why but 'tom_mrcread' sometimes has
-% problems with tomograms processed with Pyto and 3dmod
-display(file)
-O = tom_mrcread(file).Value;
 
-file = sprintf( '%s/%s_flt%s', idir, fstem, fext );
-display(file)
-F = tom_mrcread(file).Value;
-[Nx,Ny,Nz] = size( F );
-N = zeros( Nx, Ny, Nz, 3 ); 
+% Choose default command line output for membseg2
+handles.output = hObject;
 
-file = sprintf( '%s/%s_n1%s', idir, fstem, fext );
-display(file)
-N(:,:,:,1) = tom_mrcread(file).Value;
+% Parse input
+openFileTool_ClickedCallback(hObject, eventdata, handles)
+% Remove the incoming tomogram flag for possible next data loading during
+% this session
+handles.inTomoFile = '';
 
-file = sprintf( '%s/%s_n2%s', idir, fstem, fext );
-display(file)
-N(:,:,:,2) = tom_mrcread(file).Value;
+% Update handles structure
+guidata(hObject, handles);
 
-file = sprintf( '%s/%s_n3%s', idir, fstem, fext );
-display(file)
-N(:,:,:,3) = tom_mrcread(file).Value;
-
-T =  false(Nx,Ny,Nz);
-L = uint32( zeros(Nx,Ny,Nz) );
-M = single( zeros(Nx,Ny,Nz) );
-C = uint32( zeros(Nx,Ny,Nz) );
-Q = uint8( zeros(Nx,Ny,Nz) );
-mn = min(min(min( F )));
-mx = max(max(max( F )));
-
-% Create density slide range
-% slider_step(1) = 1. / (mx-mn);
-% slider_step(2) = 5. / (mx-mn);
-% if slider_step(1) < 0.01
-%     slider_step(1) = 0.01;
-% end
-% if slider_step(2) < 0.10
-%     slider_step(2) = 0.10;
-% end
-% set( handles.sldr_thres,'SliderStep', slider_step, 'max', mx, 'min', mn );
-set( handles.sldr_thres,'SliderStep', [0.001 0.1], 'max', mx, 'min', mn );
-set( handles.sldr_thres, 'Value', mn);
-
-% Create slice slide range
-slider_step(1) = 1/Nz;
-slider_step(2) = 5/Nz;
-set(handles.sldr_zs,'SliderStep', slider_step, 'max', Nz, 'min', 1 );
-set( handles.sldr_zs, 'Value', round(Nz/2) );
-
-% Update crop panel
-set( handles.ed_crop_x_high, 'String', num2str(Nx) );
-set( handles.ed_crop_y_high, 'String', num2str(Ny) );
-set( handles.ed_crop_z_high, 'String', num2str(Nz) );
-
-% Show input image
-set( handles.rbtn_org, 'Value', 1 );
-rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-
-% Set .mrc as default format
-set( handles.rd_btn_mrc, 'Value', 1 );
 
 % --- Outputs from this function are returned to the command line.
 function varargout = membseg2_OutputFcn(hObject, eventdata, handles)
@@ -162,6 +105,12 @@ function varargout = membseg2_OutputFcn(hObject, eventdata, handles)
 % Get default command line output from handles structure
 varargout{1} = handles.output;
 
+if (isfield(handles,'closeFigure') && handles.closeFigure)
+      mainGUI_CloseRequestFcn(hObject, eventdata, handles)
+end
+
+function mainGUI_CloseRequestFcn(hObject, eventdata, handles)
+delete(hObject);
 
 % --- Executes on slider movement.
 function sldr_zs_Callback(hObject, eventdata, handles)
@@ -196,22 +145,22 @@ function sldr_thres_Callback(hObject, eventdata, handles)
 
 global F;
 global T;
-global M;
+% global M;
 
-% Update density threshold
-if get(handles.chck_clft,'Value')
-    thr = get( handles.sldr_thres, 'Value' );
-    T = M > thr;
-    set( handles.ed_th, 'String', num2str(thr) );
-    set( handles.rbtn_thr, 'Value', 1 );
-    rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-else
-    thr = get( handles.sldr_thres, 'Value' );
-    T = F > thr;
-    set( handles.ed_th, 'String', num2str(thr) );
-    set( handles.rbtn_thr, 'Value', 1 );
-    rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-end
+% % Update density threshold
+% if get(handles.chck_clft,'Value')
+%     thr = get( handles.sldr_thres, 'Value' );
+%     T = M > thr;
+%     set( handles.ed_th, 'String', num2str(thr) );
+%     set( handles.rbtn_thr, 'Value', 1 );
+%     rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
+% else
+thr = get( handles.sldr_thres, 'Value' );
+T = F > thr;
+set( handles.ed_th, 'String', sprintf('%.2f',thr) );
+set( handles.rbtn_thr, 'Value', 1 );
+rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
+% end
 
 
 % --- Executes during object creation, after setting all properties.
@@ -308,10 +257,19 @@ function btn_sv_lbl_Callback(hObject, eventdata, handles)
 global L;
 
 if get(handles.rd_btn_mrc,'Value')
-    tom_mrcwrite( L );
+    if ~isempty(handles.outputDir)
+        tom_mrcwrite(L, 'name', outputDir);
+    else
+        tom_mrcwrite(L);
+    end
 else
-    tom_emwrite( L );
+    if ~isempty(handles.outputDir)
+        tom_emwrite(L, 'name', outputDir);
+    else
+        tom_emwrite(L);
+    end
 end
+
 
 % --- Executes on button press in btn_sv_clft.
 function btn_sv_clft_Callback(hObject, eventdata, handles)
@@ -355,7 +313,7 @@ function rbtn_lbl_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in rbtn_dflt.
-function rbtn_dflt_Callback(hObject, eventdata, handles)
+%function rbtn_dflt_Callback(hObject, eventdata, handles)
 % hObject    handle to rbtn_dflt (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -364,7 +322,7 @@ function rbtn_dflt_Callback(hObject, eventdata, handles)
 
 
 % --- Executes on button press in rbtn_clft.
-function rbtn_clft_Callback(hObject, eventdata, handles)
+% function rbtn_clft_Callback(hObject, eventdata, handles)
 % hObject    handle to rbtn_clft (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -493,7 +451,7 @@ function btn_disp_cur_Callback(hObject, eventdata, handles)
 
 global cur_state;
 
-if (get(handles.rbtn_lbl,'Value')) || (get(handles.rbtn_clft,'Value'))
+if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
     if cur_state == 1
         datacursormode off;
         cur_state = 0;
@@ -745,7 +703,7 @@ if (ro>=0) && (s>=0)
     M(Id) = Id2;
     M(M<0) = 0;
     M(M>100) = 100;
-    set( handles.rbtn_dflt, 'Value', 1 );
+%     set( handles.rbtn_dflt, 'Value', 1 );
     rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
 else
     warndlg( 'The distance and sensitivity must be greater than 0.' );
@@ -810,7 +768,7 @@ global C;
 lv = str2double( get(handles.ed_min,'String') );
 hv = str2double( get(handles.ed_max,'String') );
 C = synclft3d( L>0, N, lv, hv ); 
-set( handles.rbtn_clft, 'Value', 1 );
+%set( handles.rbtn_clft, 'Value', 1 );
 rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
 
 
@@ -848,33 +806,33 @@ function rbtn_group_SelectionChangeFcn(hObject, eventdata, handles)
 global F;
 global T;
 global L;
-global M;
-global C;
+% global M;
+% global C;
 global O;
 global Q;
 
 % Selected the image for being displayed
 axes( handles.ax_disp );
 slider_value = round( get( handles.sldr_zs, 'Value' ) );
-set( handles.ed_zs, 'String', num2str(slider_value) );
-if get( handles.rbtn_clft, 'Value' )
-    Ih = C(:,:,slider_value);
-    mx = max(max(Ih));
-    if mx <= 0
-        imshow( Ih, [] );
-    else
-        imshow( Ih, jet(max(max(Ih))) );
-    end
-elseif get( handles.rbtn_thr, 'Value' );
+set( handles.ed_zs, 'String', sprintf('%i', slider_value));
+% if get( handles.rbtn_clft, 'Value' )
+%     Ih = C(:,:,slider_value);
+%     mx = max(max(Ih));
+%     if mx <= 0
+%         imshow( Ih, [] );
+%     else
+%         imshow( Ih, jet(max(max(Ih))) );
+%     end
+if get( handles.rbtn_thr, 'Value' )
     imshow( T(:,:,slider_value), [] );
-elseif get( handles.rbtn_lbl, 'Value' );
+elseif get( handles.rbtn_lbl, 'Value' )
     Ih = L(:,:,slider_value);
     imshow( Ih, jet(max(max(Ih))) );
-elseif get( handles.rbtn_dflt, 'Value' );
-    imshow( M(:,:,slider_value), [] );    
-elseif get( handles.rbtn_flt, 'Value' );
+% elseif get( handles.rbtn_dflt, 'Value' )
+%     imshow( M(:,:,slider_value), [] );    
+elseif get( handles.rbtn_flt, 'Value' )
     imshow( F(:,:,slider_value), [] );
-elseif get( handles.rbtn_mat, 'Value' );
+elseif get( handles.rbtn_mat, 'Value' )
     imshow( Q(:,:,slider_value), lines(256) ); 
 else
     imshow( O(:,:,slider_value), [] );
@@ -888,32 +846,32 @@ function btn_dc_lbl_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 global L;
-global C;
+% global C;
 global Q;
 global cur_state;
 global curs;
 
-if (get(handles.rbtn_lbl,'Value')) || (get(handles.rbtn_clft,'Value'))
+if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
     if cur_state == 4
         % Get current lablel
         st = getCursorInfo( curs );
         x = st.Position(2);
         y = st.Position(1);
         z = round( get(handles.sldr_zs,'Value') );
-        if get(handles.rbtn_clft,'Value')
-            lc = C(x,y,z);
-        else
-            lc = L(x,y,z);
-        end
+%         if get(handles.rbtn_clft,'Value')
+%             lc = C(x,y,z);
+%         else
+        lc = L(x,y,z);
+%         end
         if lc>0
             % Change the label
             lh = round( str2double(get(handles.ed_lbl,'String')) );
             if lh >= 1
-                if get(handles.rbtn_clft,'Value')
-                    Id = C == lc;
-                else
-                    Id = L == lc;
-                end
+%                 if get(handles.rbtn_clft,'Value')
+%                     Id = C == lc;
+%                 else
+                Id = L == lc;
+%                 end
                 Q(Id) = lh;
                 % Turn cursor mode off
                 datacursormode off;
@@ -992,6 +950,9 @@ function ed_th_Callback(hObject, eventdata, handles)
 % Hints: get(hObject,'String') returns contents of ed_th as text
 %        str2double(get(hObject,'String')) returns contents of ed_th as a double
 
+set(handles.sldr_thres, 'Value', str2double(get(hObject,'String')))
+sldr_thres_Callback(hObject, eventdata, handles)
+
 
 % --- Executes during object creation, after setting all properties.
 function ed_th_CreateFcn(hObject, eventdata, handles)
@@ -1014,7 +975,8 @@ function ed_zs_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of ed_zs as text
 %        str2double(get(hObject,'String')) returns contents of ed_zs as a double
-
+set(handles.sldr_zs, 'Value', str2double(get(hObject,'String')))
+sldr_zs_Callback(hObject, eventdata, handles)
 
 % --- Executes during object creation, after setting all properties.
 function ed_zs_CreateFcn(hObject, eventdata, handles)
@@ -1063,9 +1025,9 @@ th = str2double( get(handles.ed_sz_thr,'String') );
 if get( handles.rbtn_lbl, 'Value' );
     L = L .* (L>th);
     rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-elseif get( handles.rbtn_clft, 'Value' );
-    C = C .* (C>th);
-    rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
+% elseif get( handles.rbtn_clft, 'Value' );
+%     C = C .* (C>th);
+%     rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
 end
 
 
@@ -1212,9 +1174,18 @@ function btn_sv_mat_Callback(hObject, eventdata, handles)
 global Q;
 
 if get(handles.rd_btn_mrc,'Value')
-    tom_mrcwrite( Q );
+    if ~isempty(handles.outputDir)
+        tom_mrcwrite(Q, 'name', outputDir);
+    else
+        tom_mrcwrite(Q);
+    end
+        
 else
-    tom_emwrite( Q );
+    if ~isempty(handles.outputDir)
+        tom_emwrite(Q, 'name', outputDir);
+    else
+        tom_emwrite(Q);
+    end
 end
 
 
@@ -1227,8 +1198,8 @@ function btn_figure_Callback(hObject, eventdata, handles)
 global F;
 global T;
 global L;
-global M;
-global C;
+% global M;
+% global C;
 global O;
 global Q;
 
@@ -1239,24 +1210,24 @@ str = 'membseg2 figure';
 % Selected the image for being displayed
 slider_value = round( get( handles.sldr_zs, 'Value' ) );
 set( handles.ed_zs, 'String', num2str(slider_value) );
-if get( handles.rbtn_clft, 'Value' );
-    Ih = C(:,:,slider_value);
-    mx = max(max(Ih));
-    if mx <= 0
-        figure('name',str), imshow( Ih, [] );
-    else
-        figure('name',str), imshow( Ih, jet(max(max(Ih))) );
-    end
-elseif get( handles.rbtn_thr, 'Value' );
+% if get( handles.rbtn_clft, 'Value' );
+%     Ih = C(:,:,slider_value);
+%     mx = max(max(Ih));
+%     if mx <= 0
+%         figure('name',str), imshow( Ih, [] );
+%     else
+%         figure('name',str), imshow( Ih, jet(max(max(Ih))) );
+%     end
+if get( handles.rbtn_thr, 'Value' )
     figure('name',str), imshow( T(:,:,slider_value), [] );
-elseif get( handles.rbtn_lbl, 'Value' );
+elseif get( handles.rbtn_lbl, 'Value' )
     Ih = L(:,:,slider_value);
     figure('name',str), imshow( Ih, jet(max(max(Ih))) );
-elseif get( handles.rbtn_dflt, 'Value' );
-    figure('name',str), imshow( M(:,:,slider_value), [] );    
-elseif get( handles.rbtn_flt, 'Value' );
+% elseif get( handles.rbtn_dflt, 'Value' )
+%     figure('name',str), imshow( M(:,:,slider_value), [] );    
+elseif get( handles.rbtn_flt, 'Value' )
     figure('name',str), imshow( F(:,:,slider_value), [] );
-elseif get( handles.rbtn_mat, 'Value' );
+elseif get( handles.rbtn_mat, 'Value' )
     figure('name',str), imshow( Q(:,:,slider_value), lines(256) ); 
 else
     figure('name',str), imshow( O(:,:,slider_value), [] );
@@ -1284,3 +1255,85 @@ function rd_btn_mrc_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of rd_btn_mrc
+
+
+% --------------------------------------------------------------------
+function openFileTool_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to openFileTool (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+global O;
+global F;
+global T;
+global L;
+global M;
+global C;
+global Q;
+
+% Load input tomogram
+closeRequest = true;
+if isempty(handles.inTomoFile)
+    [fname, idir] = uigetfile( {'*.mrc';'*.rec';'*.*'}, 'Stem name of input data' );    
+    if fname == 0
+        handles.closeFigure = true;
+    else
+        [~, fstem, fext] = fileparts(fname);
+        closeRequest = false;
+        % TODO: This is provisional I do not why but 'tom_mrcread' sometimes has
+        % problems with tomograms processed with Pyto and 3dmod
+    end
+else
+    closeRequest = false;
+    [idir, fstem, fext] = fileparts(handles.inTomoFile);
+end
+
+if ~closeRequest
+    file = sprintf( '%s/%s%s', idir, fstem, fext);
+    set(handles.tomoName, 'String', file);
+    fprintf('\nReading %s...\n', file);
+    O = tom_mrcread(file).Value;
+    fprintf('Done\n')
+
+    file = sprintf( '%s/%s_flt%s', idir, fstem, fext );
+    fprintf('Reading %s...\n', file);
+    F = tom_mrcread(file).Value;
+    fprintf('Done\n')
+    [Nx,Ny,Nz] = size( F );
+
+    T =  false(Nx,Ny,Nz);
+    L = uint32( zeros(Nx,Ny,Nz) );
+    M = single( zeros(Nx,Ny,Nz) );
+    C = uint32( zeros(Nx,Ny,Nz) );
+    Q = uint8( zeros(Nx,Ny,Nz) );
+    mn = min(min(min( F )));
+    mx = max(max(max( F )));
+
+    set( handles.sldr_thres,'SliderStep', [0.001 0.1], 'max', mx, 'min', mn );
+    set( handles.sldr_thres, 'Value', mn);
+
+    % Create slice slide range
+    slider_step(1) = 1/Nz;
+    slider_step(2) = 5/Nz;
+    set(handles.sldr_zs,'SliderStep', slider_step, 'max', Nz, 'min', 1 );
+    set( handles.sldr_zs, 'Value', round(Nz/2) );
+
+    % Update crop panel
+    set( handles.ed_crop_x_high, 'String', num2str(Nx) );
+    set( handles.ed_crop_y_high, 'String', num2str(Ny) );
+    set( handles.ed_crop_z_high, 'String', num2str(Nz) );
+
+    % Show input image
+    set( handles.rbtn_org, 'Value', 1 );
+    rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
+
+    % Set .mrc as default format
+    set( handles.rd_btn_mrc, 'Value', 1 );
+end
+
+% Remove the incoming tomogram flag for possible next data loading during
+% this session
+handles.inTomoFile = '';
+
+% Update handles structure
+guidata(hObject, handles);
