@@ -22,7 +22,7 @@ function varargout = membseg2(varargin)
 
 % Edit the above text to modify the response to help membseg2
 
-% Last Modified by GUIDE v2.5 26-Apr-2021 13:03:12
+% Last Modified by GUIDE v2.5 10-May-2021 17:02:25
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -272,6 +272,8 @@ else
         tom_emwrite(L);
     end
 end
+msg = 'Labels were correctly saved';
+updateLog(handles, msg);
 
 
 % --- Executes on button press in btn_sv_clft.
@@ -882,6 +884,8 @@ if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
                 set( hObject, 'String', 'Display Cursor' );
                 set( handles.rbtn_mat, 'Value', 1 );
                 rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
+                msg = sprintf('Membrane annotated with label %i', lh);
+                updateLog(handles, msg);
             else
                 warndlg( 'The label must be equal or greater than 1.' );
             end
@@ -1193,6 +1197,8 @@ else
         tom_emwrite(Q);
     end
 end
+msg = 'Materials were correctly saved';
+updateLog(handles, msg);
 
 
 % --- Executes on button press in btn_figure.
@@ -1297,14 +1303,21 @@ end
 if ~closeRequest
     file = sprintf( '%s/%s%s', idir, fstem, fext);
     set(handles.tomoName, 'String', file);
-    fprintf('\nReading %s...\n', file);
+    msg = sprintf('Reading %s...', file);
+    done = 'Done';
+    fprintf('\n%s\n', msg);
+    updateLog(handles, msg)
     O = tom_mrcread(file).Value;
-    fprintf('Done\n')
+    fprintf('%s\n', done)
+    updateLog(handles, done);
 
     file = sprintf( '%s/%s_flt%s', idir, fstem, fext );
-    fprintf('Reading %s...\n', file);
+    msg = sprintf('Reading %s...', file);
+    fprintf('\n%s\n', msg);
+    updateLog(handles, msg)
     F = tom_mrcread(file).Value;
     fprintf('Done\n')
+    updateLog(handles, done);
     [Nx,Ny,Nz] = size( F );
 
     T =  false(Nx,Ny,Nz);
@@ -1364,3 +1377,35 @@ else
     fext = '.em';
 end
 outputFile = fullfile(fpath, [fname, fext]);
+
+
+
+function cmd_list_Callback(hObject, eventdata, handles)
+% hObject    handle to cmd_list (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of cmd_list as text
+%        str2double(get(hObject,'String')) returns contents of cmd_list as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function cmd_list_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to cmd_list (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+function updateLog(handles, msg)
+prevMsg = get(handles.cmd_list, 'String');
+if isempty(prevMsg)
+    prevMsg = {datestr(now)};
+end
+newMsg = [prevMsg; {[datestr(now), ' ----> ', msg]}];
+set(handles.cmd_list, 'String', newMsg);
