@@ -1407,5 +1407,5 @@ prevMsg = get(handles.cmd_list, 'String');
 if isempty(prevMsg)
     prevMsg = {datestr(now)};
 end
-newMsg = [prevMsg; {[datestr(now), ' ----> ', msg]}];
+newMsg = [{[datestr(now), ' ----> ', msg]}; prevMsg];
 set(handles.cmd_list, 'String', newMsg);
