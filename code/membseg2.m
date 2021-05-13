@@ -66,6 +66,7 @@ la = 0;
 cur_state = 0;
 curs = datacursormode(hObject);
 hfig = -1;
+handles.materials = [];
 
 % Get possible inputs
 handles.inTomoFile = '';
@@ -145,22 +146,13 @@ function sldr_thres_Callback(hObject, eventdata, handles)
 
 global F;
 global T;
-% global M;
 
 % % Update density threshold
-% if get(handles.chck_clft,'Value')
-%     thr = get( handles.sldr_thres, 'Value' );
-%     T = M > thr;
-%     set( handles.ed_th, 'String', num2str(thr) );
-%     set( handles.rbtn_thr, 'Value', 1 );
-%     rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-% else
 thr = get( handles.sldr_thres, 'Value' );
 T = F > thr;
 set( handles.ed_th, 'String', sprintf('%.2f',thr) );
 set( handles.rbtn_thr, 'Value', 1 );
 rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
-% end
 
 
 % --- Executes during object creation, after setting all properties.
@@ -259,8 +251,14 @@ isMaterial = false;
 
 if get(handles.rd_btn_mrc,'Value')
     if ~isempty(handles.outFilename)
+        % Save labels to mrc file
         outputFile = checkOutputFilename(handles, isMaterial);
         tom_mrcwrite(L, 'name', outputFile);
+        % Save labels to txt file 
+        labels = unique(L(:));
+        labels = labels(labels > 0);
+        [fpath, fname, ~] = fileparts(outputFile);
+        dlmwrite(fullfile(fpath, [fname, '.txt']), labels');
     else
         tom_mrcwrite(L);
     end
@@ -851,7 +849,6 @@ function btn_dc_lbl_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 global L;
-% global C;
 global Q;
 global cur_state;
 global curs;
@@ -863,20 +860,12 @@ if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
         x = st.Position(2);
         y = st.Position(1);
         z = round( get(handles.sldr_zs,'Value') );
-%         if get(handles.rbtn_clft,'Value')
-%             lc = C(x,y,z);
-%         else
         lc = L(x,y,z);
-%         end
         if lc>0
             % Change the label
             lh = round( str2double(get(handles.ed_lbl,'String')) );
             if lh >= 1
-%                 if get(handles.rbtn_clft,'Value')
-%                     Id = C == lc;
-%                 else
                 Id = L == lc;
-%                 end
                 Q(Id) = lh;
                 % Turn cursor mode off
                 datacursormode off;
@@ -885,6 +874,7 @@ if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
                 set( handles.rbtn_mat, 'Value', 1 );
                 rbtn_group_SelectionChangeFcn(hObject, eventdata, handles);
                 msg = sprintf('Membrane annotated with label %i', lh);
+                handles.materials = [handles.materials, lh]; % Store the annotated materials
                 updateLog(handles, msg);
             else
                 warndlg( 'The label must be equal or greater than 1.' );
@@ -902,6 +892,10 @@ if (get(handles.rbtn_lbl,'Value')) %|| (get(handles.rbtn_clft,'Value'))
 else
     warndlg( 'This cursor only work on "Label" or "Cleft" view.' );
 end
+
+% Update handles structure
+guidata(hObject, handles);
+
 
 function ed_lbl_Callback(hObject, eventdata, handles)
 % hObject    handle to ed_lbl (see GCBO)
@@ -1183,8 +1177,13 @@ isMaterial= true;
 
 if get(handles.rd_btn_mrc,'Value')
     if ~isempty(handles.outFilename)
+        % Save mrc file
         outputFile = checkOutputFilename(handles, isMaterial);
         tom_mrcwrite(Q, 'name', outputFile);
+        % Save annotated materials to a text file
+        [fpath, fname,  ~] = fileparts(outputFile);
+        dlmwrite(fullfile(fpath, [fname, '.txt']), handles.materials);
+        
     else
         tom_mrcwrite(Q);
     end
